@@ -149,7 +149,10 @@ def approve(agent, config: dict, quiet: bool = False, log=print) -> str:
 def reject(agent, config: dict, message: str, quiet: bool = False, log=print) -> str:
     """Reject with feedback: the agent revises the brief and asks for approval again."""
     log(f"❌ Rejected by human: {message}")
-    return _decide(agent, config, {"type": "reject", "message": message}, quiet, log)
+    # Say what to do next: without this, the model sometimes revises the draft and then stops
+    # without asking for approval again, so nothing gets published.
+    instruction = f"{message}\n\nRevise the brief to apply this feedback, then call publish_brief again with the revised brief."
+    return _decide(agent, config, {"type": "reject", "message": instruction}, quiet, log)
 
 
 def show_outputs(ticker: str | None = None, show_report: bool = True) -> dict:

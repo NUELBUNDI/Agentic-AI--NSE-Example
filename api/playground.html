@@ -279,9 +279,42 @@ function render(b) {
       if (!fb) { $("feedback").focus(); $("feedback").placeholder = "Type what the agent should change first"; return; }
       decide("reject", fb);
     };
-  } else if (b.status === "finished") {
+  } else if (b.status === "finished" && b.published) {
     showReport(b);
+  } else if (b.status === "finished") {
+    showNotPublished(b);
   }
+}
+
+// The agent finished its turn but no report was saved (e.g. after a reject it stopped without publishing).
+function showNotPublished(b) {
+  $("agent-head").innerHTML = `<div class="status error">⚠️ ${esc(b.ticker)}: the agent stopped without publishing</div>`;
+  const why = b.publish_result
+    ? `<p><b>publish_brief said:</b> ${esc(b.publish_result)}</p>`
+    : `<p>The agent never called <code>publish_brief</code> after your last decision. Ask it to publish:</p>`;
+  $("agent-out").innerHTML = `
+    <div class="approval">
+      ${why}
+      <div class="row">
+        <button class="primary" id="btn-publish-now">📤 Publish it now</button>
+        <textarea id="followup" placeholder="Or tell the agent something else, e.g. “Apply my feedback and publish.”"></textarea>
+        <button id="btn-send">Send</button>
+      </div>
+    </div>
+    ${b.agent_reply ? `<p class="sec" style="margin-top:14px">Agent's last reply</p><div class="doc">${md(b.agent_reply)}</div>` : ""}`;
+  $("btn-publish-now").onclick = () => sendMessage("Call publish_brief now with the final revised brief.");
+  $("btn-send").onclick = () => {
+    const text = $("followup").value.trim();
+    if (!text) { $("followup").focus(); return; }
+    sendMessage(text);
+  };
+}
+
+async function sendMessage(text) {
+  try {
+    started = Date.now();
+    track(await api(`/briefs/${current.thread_id}/message`, { method: "POST", body: JSON.stringify({ text }) }));
+  } catch (e) { alertBox(e.message); }
 }
 
 // One styled row per step: who did it (lead or a sub-agent), and what kind of step it is.
@@ -321,7 +354,7 @@ async function showReport(b) {
   const pdf = b.pdf_url
     ? `<a href="${b.pdf_url}" target="_blank"><button class="primary">📄 Open PDF</button></a>
        <a href="${b.pdf_url}?download=true"><button>⬇️ Download PDF</button></a>`
-    : `<span class="empty">No PDF (install: pip install markdown fpdf2)</span>`;
+    : `<span class="empty">No PDF: ${esc(b.publish_result || "the PDF could not be made")}</span>`;
   $("agent-out").innerHTML = `
     <div class="actions">${pdf}<a href="${b.report_url}" target="_blank"><button>📝 Markdown</button></a></div>
     ${b.pdf_url ? `<iframe class="pdf" src="${b.pdf_url}" title="Published report PDF"></iframe>`

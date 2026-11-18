@@ -15,6 +15,7 @@ Endpoints:
     GET  /briefs/{thread_id}            progress: plan, steps, and the draft once it waits for you
     POST /briefs/{thread_id}/approve    approve -> the agent publishes the report
     POST /briefs/{thread_id}/reject     reject with feedback -> the agent revises it
+    POST /briefs/{thread_id}/message    tell the agent something more (e.g. "publish it now")
     GET  /reports/{ticker}              the published report (Markdown)
     GET  /reports/{ticker}/pdf          the published report (PDF)
 
@@ -29,12 +30,14 @@ import os
 import secrets
 import sys
 import threading
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))   # api/ -> kit root, so we can import agent etc.
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, PlainTextResponse, Response
+from langchain_core.messages import ToolMessage
 from langgraph.checkpoint.memory import InMemorySaver
 from pydantic import BaseModel
 
@@ -148,11 +151,26 @@ def _brief_status(thread_id: str) -> dict:
     waiting = [req for intr in state.interrupts for req in helpers._requests(intr)]
     if waiting:
         out.update(status="awaiting_approval", draft_markdown=waiting[0].get("args", {}).get("brief_markdown", ""))
-    else:
-        out.update(status="finished", agent_reply=helpers.final_answer(get_agent(), helpers.new_config(thread_id)),
-                   report_url=f"/reports/{brief['ticker']}",
-                   pdf_url=f"/reports/{brief['ticker']}/pdf" if nse.pdf_path(brief["ticker"]).exists() else None)
+        return out
+
+    # Finished: but did it really publish? (After a reject, the model sometimes stops without publishing.)
+    code = brief["ticker"]
+    report, pdf = nse.report_path(code), nse.pdf_path(code)
+    published = report.exists() and report.stat().st_mtime >= brief["started"]     # this brief, not an old one
+    out.update(status="finished", published=published,
+               publish_result=_publish_result(state),         # what publish_brief said, e.g. an error
+               agent_reply=helpers.final_answer(get_agent(), helpers.new_config(thread_id)),
+               report_url=f"/reports/{code}" if published else None,
+               pdf_url=f"/reports/{code}/pdf" if published and pdf.exists() else None)
     return out
+
+
+def _publish_result(state) -> str | None:
+    """The last answer from the publish_brief tool in this conversation (None if it never ran)."""
+    for m in reversed((state.values or {}).get("messages", [])):
+        if isinstance(m, ToolMessage) and m.name == "publish_brief":
+            return str(m.content)
+    return None
 
 
 def _require_waiting(thread_id: str) -> dict:
@@ -207,7 +225,7 @@ def start_brief(body: BriefRequest):
     code = _code_or_404(body.ticker)
     config = helpers.new_config()                 # a new conversation for this brief
     thread_id = config["configurable"]["thread_id"]
-    BRIEFS[thread_id] = {"ticker": code, "running": False, "error": None, "log": []}
+    BRIEFS[thread_id] = {"ticker": code, "running": False, "error": None, "log": [], "started": time.time()}
     _in_background(thread_id, lambda log: helpers.run(get_agent(), f"Brief me on {code}", config, log=log))
     return _brief_status(thread_id)
 
@@ -231,6 +249,23 @@ def reject_brief(thread_id: str, body: Feedback):
     """Reject with feedback: the agent revises the draft and asks for approval again."""
     config = _require_waiting(thread_id)
     _in_background(thread_id, lambda log: helpers.reject(get_agent(), config, body.feedback, log=log))
+    return _brief_status(thread_id)
+
+
+class Message(BaseModel):
+    text: str                           # e.g. "Publish the brief now."
+
+
+@app.post("/briefs/{thread_id}/message", status_code=202)
+def message_brief(thread_id: str, body: Message):
+    """Send the agent a follow-up message in the same conversation, e.g. when it stopped without
+    publishing. If it then calls publish_brief, the brief waits for your approval again."""
+    status = _brief_status(thread_id)["status"]
+    if status in ("running", "awaiting_approval"):
+        raise HTTPException(409, f"The brief is {status.replace('_', ' ')}; send messages once it has finished.")
+    config = helpers.new_config(thread_id)
+    BRIEFS[thread_id]["started"] = time.time()
+    _in_background(thread_id, lambda log: (log(f"🧑 You: {body.text}"), helpers.run(get_agent(), body.text, config, log=log)))
     return _brief_status(thread_id)
 
 
