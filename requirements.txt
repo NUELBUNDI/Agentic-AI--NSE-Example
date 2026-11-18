@@ -1,0 +1,18 @@
+# Pinned to the versions the kit was tested with (laptop and Railway install the same thing).
+deepagents==0.7.39
+langchain==1.5.0
+langchain-core==1.8.1
+langchain-google-genai==4.5.0
+langgraph==1.2.22
+pandas==3.1.1
+numpy==2.5.5
+requests==2.34.2
+# PDF copy of the published report
+markdown==3.11.3
+fpdf2==2.9.0
+# web API + playground (api/)
+fastapi==0.163.2
+uvicorn==0.54.0
+# local notebooks
+ipykernel==7.4.0
+nbformat==5.11.1

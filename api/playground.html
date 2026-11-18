@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NSE Research Playground</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.1.6/purify.min.js"></script>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --ink: #18202b; --muted: #5d6b7c; --line: #e2e6ec;
+    --accent: #0f7b5f; --accent-ink: #ffffff; --soft: #e8f4ef;
+    --up: #0f7b5f; --down: #c0392b; --warn: #a15c00; --warn-soft: #fff4e0;
+    --mono: ui-monospace, "Cascadia Code", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #11161d; --card: #19202a; --ink: #e6ebf1; --muted: #93a1b2; --line: #2a3340;
+      --accent: #2fb58c; --accent-ink: #08130f; --soft: #173229;
+      --up: #3cc796; --down: #ff7a6b; --warn: #f0b04a; --warn-soft: #33270f;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { padding: 18px 24px; border-bottom: 1px solid var(--line); background: var(--card);
+           display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; }
+  header h1 { margin: 0; font-size: 20px; }
+  header .sub { color: var(--muted); font-size: 13px; }
+  .badges { display: flex; gap: 8px; flex-wrap: wrap; }
+  .badge { font-size: 12px; padding: 3px 10px; border-radius: 99px; background: var(--soft); color: var(--accent); }
+  .badge.warn { background: var(--warn-soft); color: var(--warn); }
+  main { padding: 20px 24px 40px; }                       /* full width of the screen */
+  @media (max-width: 600px) { main { padding: 16px 16px 32px; } }
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 18px; }
+  input, textarea { font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line);
+                    border-radius: 8px; padding: 9px 12px; }
+  #ticker { width: 230px; text-transform: uppercase; }
+  button { font: inherit; border: 1px solid var(--line); background: var(--card); color: var(--ink);
+           border-radius: 8px; padding: 9px 14px; cursor: pointer; }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+  button.danger { color: var(--down); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .grid { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: 18px; }
+  @media (max-width: 1100px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; margin-bottom: 18px; }
+  .card h2 { margin: 0 0 4px; font-size: 16px; }
+  .card .hint { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
+  .empty { color: var(--muted); font-size: 14px; padding: 8px 0; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 10px; }
+  .tile { border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; }
+  .tile .k { font-size: 12px; color: var(--muted); }
+  .tile .v { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .up { color: var(--up); } .down { color: var(--down); }
+  .meta { margin-top: 10px; font-size: 12px; color: var(--muted); }
+  .news { list-style: none; margin: 0; padding: 0; }
+  .news li { padding: 10px 0; border-top: 1px solid var(--line); }
+  .news li:first-child { border-top: 0; }
+  .news a { color: var(--ink); font-weight: 500; text-decoration: none; }
+  .news a:hover { color: var(--accent); text-decoration: underline; }
+  .news .row { font-size: 12px; color: var(--muted); display: flex; gap: 8px; align-items: center; margin-bottom: 2px; }
+  .tag { font-size: 11px; padding: 1px 8px; border-radius: 99px; background: var(--soft); color: var(--accent); }
+  .tag.market { background: var(--warn-soft); color: var(--warn); }
+  .status { display: flex; align-items: center; gap: 10px; font-weight: 600; margin-bottom: 12px; }
+  .spinner { width: 16px; height: 16px; border: 2px solid var(--line); border-top-color: var(--accent);
+             border-radius: 50%; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .cols { display: grid; grid-template-columns: minmax(220px, 1fr) minmax(0, 3fr); gap: 16px; }
+  @media (max-width: 800px) { .cols { grid-template-columns: 1fr; } }
+  .sec { font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 6px; }
+  .todos { list-style: none; padding: 0; margin: 0 0 12px; font-size: 14px; }
+  .todos li { padding: 3px 0; }
+  /* Activity log: big and easy to follow on a projector */
+  .log { font: 14px/1.6 var(--mono); background: var(--bg); border: 1px solid var(--line); border-radius: 10px;
+         padding: 12px 14px; height: clamp(420px, calc(100vh - 320px), 900px); overflow: auto;
+         white-space: pre-wrap; word-break: break-word; }
+  .log .ln { padding: 3px 8px; border-radius: 6px; }
+  .log .ln + .ln { margin-top: 2px; }
+  .log .role { font-weight: 700; color: var(--accent); }
+  .log .sub { margin-left: 22px; border-left: 3px solid var(--line); }        /* a sub-agent's step */
+  .log .sub .role { color: var(--warn); }
+  .log .res { color: var(--muted); font-size: 12.5px; }                       /* a tool's answer */
+  .log .plan { color: var(--muted); margin-left: 22px; }
+  .log .gate { background: var(--warn-soft); color: var(--warn); font-weight: 600; }
+  .log .say { background: var(--soft); }                                      /* a final reply */
+  .log .new { animation: flash 1.2s ease-out; }
+  @keyframes flash { from { background: var(--soft); } }
+  .todos { font-size: 15px; }
+  .todos li { padding: 5px 0; }
+  .doc { border: 1px solid var(--line); border-radius: 10px; padding: 4px 18px; max-height: 560px; overflow: auto; }
+  .doc table { border-collapse: collapse; font-size: 14px; }
+  .doc th, .doc td { border: 1px solid var(--line); padding: 4px 10px; text-align: left; }
+  .doc blockquote { margin: 8px 0; padding: 6px 12px; border-left: 3px solid var(--warn); background: var(--warn-soft); }
+  .doc a { color: var(--accent); }
+  .approval { margin-top: 14px; padding: 14px; border: 2px solid var(--warn); border-radius: 10px; background: var(--warn-soft); }
+  .approval p { margin: 0 0 10px; font-weight: 600; }
+  .approval .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .approval textarea { flex: 1 1 260px; min-height: 42px; resize: vertical; }
+  .pdf { width: 100%; height: 640px; border: 1px solid var(--line); border-radius: 10px; margin-top: 12px; background: #fff; }
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .actions a { text-decoration: none; }
+  .error { color: var(--down); font-weight: 600; }
+  footer { text-align: center; color: var(--muted); font-size: 12px; padding: 0 16px 24px; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>🇰🇪 NSE Research Playground</h1>
+    <div class="sub">Tools → AI agent → human approval → published report. Educational research, not investment advice.</div>
+  </div>
+  <div class="badges"><span class="badge" id="mode">connecting…</span><span class="badge" id="model"></span></div>
+</header>
+
+<main>
+  <div class="controls">
+    <input id="ticker" list="tickers" placeholder="Ticker or company, e.g. EQTY" value="EQTY" aria-label="Ticker">
+    <datalist id="tickers"></datalist>
+    <button id="btn-data">📈 Price data</button>
+    <button id="btn-news">📰 News</button>
+    <button id="btn-brief" class="primary">✨ Write a brief with the agent</button>
+  </div>
+
+  <div class="grid">
+    <section>
+      <div class="card">
+        <h2>1 · Tool: get_stock_data</h2>
+        <p class="hint">Plain Python, no AI. This is what the technical-analyst sub-agent sees.</p>
+        <div id="data"><div class="empty">Click “Price data”.</div></div>
+      </div>
+      <div class="card">
+        <h2>2 · Tool: search_news</h2>
+        <p class="hint">Each item is tagged company-specific or market-wide.</p>
+        <div id="news"><div class="empty">Click “News”.</div></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="card">
+        <h2>3 · The agent</h2>
+        <p class="hint">Plans, delegates to sub-agents, drafts, gets reviewed, then waits for <b>you</b> before publishing.</p>
+        <div id="agent"><div class="empty">Click “Write a brief with the agent”. With a real model this takes 1–3 minutes.</div></div>
+      </div>
+    </section>
+  </div>
+</main>
+<footer>Runs on your machine via FastAPI · API docs at <a href="/docs">/docs</a></footer>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const md = (text) => (window.marked && window.DOMPurify)
+  ? DOMPurify.sanitize(marked.parse(text || ""))
+  : `<pre style="white-space:pre-wrap">${esc(text)}</pre>`;          // offline fallback: plain text
+const ticker = () => $("ticker").value.trim();
+const pct = (v) => v == null ? "–" : `<span class="${v >= 0 ? "up" : "down"}">${v > 0 ? "+" : ""}${v}%</span>`;
+const kes = (v) => v == null ? "–" : `KES ${Number(v).toLocaleString()}`;
+
+async function api(path, options = {}) {
+  const r = await fetch(path, { headers: { "Content-Type": "application/json" }, ...options });
+  const body = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(body.detail || `${r.status} ${r.statusText}`);
+  return body;
+}
+
+// ---------------------------------------------------------------- header
+api("/health").then((h) => {
+  $("mode").textContent = `data: ${h.data_mode}`;
+  if (h.data_mode !== "api") $("mode").classList.add("warn");
+  $("model").textContent = `model: ${h.model}`;
+}).catch(() => { $("mode").textContent = "API not reachable"; $("mode").classList.add("warn"); });
+api("/tickers").then((list) => {
+  $("tickers").innerHTML = list.map((t) => `<option value="${esc(t.code)}">${esc(t.company)}</option>`).join("");
+}).catch(() => {});
+
+// ---------------------------------------------------------------- tool 1: price data
+$("btn-data").onclick = async () => {
+  $("data").innerHTML = `<div class="status"><div class="spinner"></div>Loading…</div>`;
+  try {
+    const d = await api(`/stocks/${encodeURIComponent(ticker())}`);
+    const t = d.trend, r = d.risk, l = d.liquidity_1y;
+    const tiles = [
+      ["Last close", kes(d.last_close)], ["1M", pct(d.returns_pct["1M"])], ["3M", pct(d.returns_pct["3M"])],
+      ["6M", pct(d.returns_pct["6M"])], ["1Y", pct(d.returns_pct["1Y"])],
+      ["52w high", kes(d.range_52w.high)], ["52w low", kes(d.range_52w.low)],
+      ["Below 52w high", `${d.range_52w.pct_below_high}%`],
+      ["Trend", esc(t.label)], ["RSI 14", t.rsi_14 ?? "–"],
+      ["vs SMA50", pct(t.price_vs_sma50_pct)], ["vs SMA200", pct(t.price_vs_sma200_pct)],
+      ["Volatility 1y", `${r.volatility_1y_annualised_pct ?? "–"}%`], ["Max drawdown 1y", pct(r.max_drawdown_1y_pct)],
+      ["Avg turnover", kes(l.avg_daily_turnover_kes)], ["Liquidity", esc(l.flag.split(" (")[0])],
+    ];
+    $("data").innerHTML = `<div class="tiles">${tiles.map(([k, v]) =>
+      `<div class="tile"><div class="k">${k}</div><div class="v">${v}</div></div>`).join("")}</div>
+      <div class="meta">${esc(d.ticker)} · as of ${esc(d.as_of)} · ${esc(d.notes[0])}</div>`;
+  } catch (e) { $("data").innerHTML = `<div class="error">${esc(e.message)}</div>`; }
+};
+
+// ---------------------------------------------------------------- tool 2: news
+$("btn-news").onclick = async () => {
+  $("news").innerHTML = `<div class="status"><div class="spinner"></div>Loading…</div>`;
+  try {
+    const n = await api(`/stocks/${encodeURIComponent(ticker())}/news?limit=8`);
+    $("news").innerHTML = (n.items.length ? `<ul class="news">${n.items.map((i) => `
+      <li><div class="row"><span class="tag ${i.tag === "market-wide" ? "market" : ""}">${esc(i.tag)}</span>
+          ${esc(i.published)} · ${esc(i.source)}</div>
+          <a href="${esc(i.url)}" target="_blank" rel="noopener">${esc(i.title)} ↗</a></li>`).join("")}</ul>`
+      : `<div class="empty">No news found.</div>`) +
+      `<div class="meta">${esc(n.company)} · ${n.counts.company_specific} company-specific, ${n.counts.market_wide} market-wide · ${esc(n.source)}</div>`;
+  } catch (e) { $("news").innerHTML = `<div class="error">${esc(e.message)}</div>`; }
+};
+
+// ---------------------------------------------------------------- the agent
+let current = null, timer = null, started = 0, lastStatus = "";
+
+$("btn-brief").onclick = async () => {
+  try {
+    const b = await api("/briefs", { method: "POST", body: JSON.stringify({ ticker: ticker() }) });
+    started = Date.now(); lastStatus = "";
+    track(b);
+  } catch (e) { $("agent").innerHTML = `<div class="error">${esc(e.message)}</div>`; }
+};
+
+function track(b) {
+  current = b;
+  render(b);
+  clearTimeout(timer);
+  if (b.status === "running") timer = setTimeout(poll, 1500);
+}
+
+async function poll() {
+  try { track(await api(`/briefs/${current.thread_id}`)); }
+  catch (e) { $("agent").innerHTML = `<div class="error">${esc(e.message)}</div>`; }
+}
+
+function render(b) {
+  $("btn-brief").disabled = b.status === "running";
+  const secs = Math.round((Date.now() - started) / 1000);
+  const icon = { completed: "✅", in_progress: "▶️" };
+  const plan = b.todos.length
+    ? `<ul class="todos">${b.todos.map((t) => `<li>${icon[t.status] || "⬜"} ${esc(t.content)}</li>`).join("")}</ul>`
+    : `<div class="empty">No plan yet…</div>`;
+  const head = {
+    running: `<div class="status"><div class="spinner"></div>Working on ${esc(b.ticker)}… ${secs}s</div>`,
+    awaiting_approval: `<div class="status">⏸️ ${esc(b.ticker)}: waiting for your approval</div>`,
+    finished: `<div class="status">✅ ${esc(b.ticker)}: published</div>`,
+    error: `<div class="status error">⚠️ ${esc(b.error)}</div>`,
+  }[b.status];
+
+  // While running, only refresh the progress parts (keeps scroll position and any typed feedback).
+  if (b.status === "running" && lastStatus === "running") {
+    $("agent-head").innerHTML = head; $("agent-plan").innerHTML = plan; fillLog(b.log); return;
+  }
+  lastStatus = b.status;
+  $("agent").innerHTML = `
+    <div id="agent-head">${head}</div>
+    <div class="cols">
+      <div><p class="sec">Plan (write_todos)</p><div id="agent-plan">${plan}</div></div>
+      <div><p class="sec">Activity: lead + sub-agents</p><div class="log" id="agent-log"></div></div>
+    </div>
+    <div id="agent-out"></div>`;
+  fillLog(b.log);
+
+  if (b.status === "awaiting_approval") {
+    $("agent-out").innerHTML = `
+      <p class="sec" style="margin-top:14px">Draft brief</p>
+      <div class="doc">${md(b.draft_markdown)}</div>
+      <div class="approval">
+        <p>Human in the loop: nothing is published until you decide.</p>
+        <div class="row">
+          <button class="primary" id="btn-approve">✅ Approve and publish</button>
+          <textarea id="feedback" placeholder="Or give feedback, e.g. “Add the 1-year max drawdown to Key risks.”"></textarea>
+          <button class="danger" id="btn-reject">❌ Reject with feedback</button>
+        </div>
+      </div>`;
+    $("btn-approve").onclick = () => decide("approve");
+    $("btn-reject").onclick = () => {
+      const fb = $("feedback").value.trim();
+      if (!fb) { $("feedback").focus(); $("feedback").placeholder = "Type what the agent should change first"; return; }
+      decide("reject", fb);
+    };
+  } else if (b.status === "finished") {
+    showReport(b);
+  }
+}
+
+// One styled row per step: who did it (lead or a sub-agent), and what kind of step it is.
+function logLine(line, isNew) {
+  const kind = /⏸️|Approved by human|Rejected by human|⚠️/.test(line) ? "gate"
+             : line.includes("↳") ? "res"
+             : /^\s+(✅|▶️|⬜)/.test(line) ? "plan"
+             : line.includes("💬") ? "say" : "";
+  const sub = /^\s+\[/.test(line) ? "sub" : "";
+  const html = esc(line.trim()).replace(/^\[([^\]]+)\]/, '<span class="role">[$1]</span>');
+  return `<div class="ln ${kind} ${sub} ${isNew ? "new" : ""}">${html}</div>`;
+}
+
+let shown = 0;     // how many log lines are on screen, so only new ones flash
+function fillLog(lines) {
+  const el = $("agent-log"); if (!el) return;
+  const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 40;
+  if (lines.length < shown) shown = 0;
+  el.innerHTML = lines.length ? lines.map((l, i) => logLine(l, i >= shown)).join("") : '<div class="ln">Starting…</div>';
+  shown = lines.length;
+  if (atBottom) el.scrollTop = el.scrollHeight;
+}
+
+async function decide(kind, feedback) {
+  try {
+    const opts = { method: "POST" };
+    if (kind === "reject") opts.body = JSON.stringify({ feedback });
+    started = Date.now();
+    track(await api(`/briefs/${current.thread_id}/${kind}`, opts));
+  } catch (e) { alertBox(e.message); }
+}
+
+function alertBox(msg) { $("agent-out").insertAdjacentHTML("afterbegin", `<div class="error">${esc(msg)}</div>`); }
+
+async function showReport(b) {
+  const text = await fetch(b.report_url).then((r) => r.ok ? r.text() : "");
+  const pdf = b.pdf_url
+    ? `<a href="${b.pdf_url}" target="_blank"><button class="primary">📄 Open PDF</button></a>
+       <a href="${b.pdf_url}?download=true"><button>⬇️ Download PDF</button></a>`
+    : `<span class="empty">No PDF (install: pip install markdown fpdf2)</span>`;
+  $("agent-out").innerHTML = `
+    <div class="actions">${pdf}<a href="${b.report_url}" target="_blank"><button>📝 Markdown</button></a></div>
+    ${b.pdf_url ? `<iframe class="pdf" src="${b.pdf_url}" title="Published report PDF"></iframe>`
+                : `<p class="sec" style="margin-top:14px">Published report</p><div class="doc">${md(text)}</div>`}`;
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,28 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python / Jupyter
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.venv/
+
+# Live API cache (rebuild with scripts/warm_cache.py); the sample data IS committed
+workspace/data/cache/prices/*.json
+workspace/data/cache/news/*.json
+
+# Agent outputs created in class
+workspace/drafts/*.md
+workspace/analysis/*.md
+workspace/reviews/*.md
+workspace/reports/*.md
+workspace/reports/*.pdf
+
+# Kept on the laptop only: the GitHub repo (and so Railway) gets just the app
+notebooks/
+tests/
+docs/
+practicals/
+scripts/
